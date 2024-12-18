@@ -1,28 +1,40 @@
+from machine import Pin
 import network
 from time import sleep
+import secret
+import lcd_api
+from gpio_lcd import GpioLcd
 
-# Opret Wi-Fi-station og forbind til et netværk
+lcd = GpioLcd(rs_pin=Pin(27),            # Thingsboard skærm
+              enable_pin=Pin(25),
+              d4_pin=Pin(33),
+              d5_pin=Pin(32),
+              d6_pin=Pin(21),
+              d7_pin=Pin(22),
+              num_lines=4,
+              num_columns=20)
+# 
+# ap = network.WLAN(network.AP_IF)
+# ap.active(True)
+# ap.config(essid="ESP32-AP", authmode=network.AUTH_OPEN)  # Åben for nem fejlsøgning
+# print("AP status:", ap.active())
+
 sta = network.WLAN(network.STA_IF)
 sta.active(True)
 
-# Kontroller, om stationen er aktiv
 if not sta.isconnected():
-    print("Trying to connect...")
-    sta.connect("", "")
+    lcd.clear
+    lcd.move_to(0,0)
+    lcd.putstr('Forbinder til Wi-Fi')
+    sta.ifconfig(('192.168.0.30', '255.255.255.192', '192.168.0.1', '192.168.0.10'))
+    sta.connect(secret.SSID, secret.PASSWORD)
 
-    # Vent på forbindelse
+    # Wait for connection
     while not sta.isconnected():
-        print("Connecting")
+        print("Connecting...")
         sleep(0.5)
 
-    if sta.isconnected():
-        print("STA connected:", sta.ifconfig())
-    else:
-        print("Connection failed")
-
-# Opret Access Point (Hotspot)
-ap = network.WLAN(network.AP_IF)
-ap.active(True)
-ap.config(essid="ESP32_Hotspot", password="12345678")
-
-print("AP active:", ap.ifconfig())
+if sta.isconnected():
+    print("Connected to AP:", sta.ifconfig())
+else:
+    print("Connection failed")
