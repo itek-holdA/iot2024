@@ -1,3 +1,6 @@
+20/12
+- Bugs og oprydning
+
 19/12 
 - Tilføjet 3-min alarm
 - Tilføjet garbage collection
