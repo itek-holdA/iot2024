@@ -4,23 +4,23 @@ from gpio_lcd import GpioLcd                         # LCD Modul til ???
 from nonblockingtimer import NonBlockingTimer        # Non blocking timer klasse
 from gps_simple import GPS_SIMPLE                    # GPS
 from uthingsboard.client import TBDeviceMqttClient   # Thingsboard
-from battery_percentage import BatteryPercent
-from adc_substitute import AdcSubstitute
-from mpu6050 import MPU6050
+from battery_percentage import BatteryPercent        # Batteri procent
+from adc_substitute import AdcSubstitute             # Bedre ADC
+from mpu6050 import MPU6050                          # MPU6050
 
-#Variables to update via HTTP
+# Variabler der bliver opdateret via HTTP
 left = 0
 right = 0
 rear = 0
-
-
 
 # GPS Variabler
 gps_port = 2                                 
 gps_speed = 9600                             
 
+# Batteri symbol
 batteri_char = bytearray([0b01110, 0b10001, 0b10001, 0b11001, 0b11101, 0b11111, 0b11111, 0b11111])
 
+# Temperatur
 temp1 = 0
 
 # Objekter
@@ -33,27 +33,24 @@ lcd = GpioLcd(rs_pin=Pin(27),            # Educaboard LCD-skærm objekt
               num_lines=4,
               num_columns=20)
 
-acc_timer = NonBlockingTimer(1000)        # Accelerations-læsnings objekt
+acc_timer = NonBlockingTimer(1000)       # Accelerations-læsnings objekt
 gps_timer = NonBlockingTimer(1000)       # GPS positionerings objekt
 temp_timer = NonBlockingTimer(1000)      # Temperatur målings objekt
-battery_timer = NonBlockingTimer(5000)   # Batteri procent målings objekt
-#esp_timer = NonBlockingTimer(100)
-movement_timer = NonBlockingTimer(1000)
-gc_timer = NonBlockingTimer(5000)
+battery_timer = NonBlockingTimer(1000)   # Batteri procent målings objekt
+movement_timer = NonBlockingTimer(1000)  # 3-Minutters lås objekt
+gc_timer = NonBlockingTimer(5000)        # Garbage collection objekt
 
 
-uart = UART(gps_port, gps_speed)         # UART object creation
-gps = GPS_SIMPLE(uart)                   # GPS object creation
+uart = UART(gps_port, gps_speed)         # UART Objekt
+gps = GPS_SIMPLE(uart)                   # GPS Objekt
 
 i2c = I2C(0)                             # I2C Objekt
 mpu6050 = MPU6050(i2c)                   # MPU6050 Objekt med I2C-0
 
-bat_perc = BatteryPercent()
-battery_adc = AdcSubstitute(36)
+bat_perc = BatteryPercent()              # BatteryPercent objekt
+battery_adc = AdcSubstitute(36)          # AdcSubstitute objekt
 
 client = TBDeviceMqttClient(secret.SERVER_IP_ADDRESS, access_token = secret.ACCESS_TOKEN)
-
-
 
 
 # Metode til temperaturlæsning, plus print i konsollen
@@ -68,9 +65,8 @@ def temp_reading():
     # Printer temperatur på LCD
     lcd.move_to(0, 0)
     lcd.putstr(f'Temp: {temp_value}C       ')
-    #lcd.move_to(0, 3)
-    #lcd.putstr(f'                    ')
     
+    # Sender temperatur data til Thingsboard
     temperature_telemetry = {"temp_value": int(temp_value)}
     client.send_telemetry(temperature_telemetry)
 
@@ -85,7 +81,7 @@ def cords_speed():
         lcd.move_to(0, 3)
         lcd.putstr(f'{int(gps.get_speed())} KM/T')
         lcd.move_to(0,2)
-        lcd.putstr(f'Course: {gps.get_course()}')
+        lcd.putstr(f'Course: {gps.get_course()      }')
         
         # Sender information om LAT/LON/COURSE/SPEED til Thingsboard
         gps_telemetry = {
@@ -109,6 +105,8 @@ def battery():
     lcd.putstr(f"{str(int(battery_percent))}%")
     lcd.move_to(19, 0)
     lcd.putchar(chr(0))
+    
+    print(battery_percent)
 
     # Sender information om batteriet til Thingsboard
     battery_telemetry = {"battery_percentage": int(battery_percent)}
@@ -116,11 +114,9 @@ def battery():
 
 def gc1():
     
-    print(f"free memory: {gc.mem_free()}") # monitor memory left
-    
-    if gc.mem_free() < 15000:          # free memory if below 2000 bytes left
-        print("Garbage collected!")
-        gc.collect()                  # free memory  
+    # Garbage-collection hvis at der er under 15k memory tilbage
+    if gc.mem_free() < 15000:          
+        gc.collect()                  
 
 # Metode til at starte HTTP-server
 def start_http_server():
@@ -140,24 +136,31 @@ def start_http_server():
 # Metode til HTTP-requests
 def handle_http_requests(server):
     global left, right, rear
-    client, addr = server.accept()
-    print("Client connected from:", addr)
-    request = client.recv(1024).decode()
-    print("Request received:", request)
+    try:
+        server.settimeout(0.1)  # Kort timeout
+        client, addr = server.accept()
+        print("Client connected from:", addr)
+        request = client.recv(1024).decode()
+        print("Request received:", request)
 
-    # Håndtering af variabel opdateringer
-    if "POST /set_left" in request:              # Opdaterer left-variabel
-        left = process_variable_update(request)
-        response = f"HTTP/1.1 200 OK\r\n\r\nLeft updated to {left}!"
-    elif "POST /set_right" in request:           # Opdaterer right-variabel
-        right = process_variable_update(request)
-        response = f"HTTP/1.1 200 OK\r\n\r\nRight updated to {right}!"
-    elif "POST /set_rear" in request:            # Opdaterer rear-variabel
-        rear = process_variable_update(request)
-        response = f"HTTP/1.1 200 OK\r\n\r\nRear updated to {rear}!"
+        # Håndtering af variabel opdateringer
+        if "POST /set_left" in request:              
+            left = process_variable_update(request)
+            response = f"HTTP/1.1 200 OK\r\n\r\nLeft updated to {left}!"
+        elif "POST /set_right" in request:           
+            right = process_variable_update(request)
+            response = f"HTTP/1.1 200 OK\r\n\r\nRight updated to {right}!"
+        elif "POST /set_rear" in request:            
+            rear = process_variable_update(request)
+            response = f"HTTP/1.1 200 OK\r\n\r\nRear updated to {rear}!"
+        else:
+            response = "HTTP/1.1 404 Not Found\r\n\r\nInvalid endpoint!"
 
-    client.send(response)
-    client.close()
+        client.send(response)
+        client.close()
+    except OSError as e:
+        if e.args[0] != 116:  # Ignorer timeout fejl (Errno 116)
+            print("Error handling request:", e)
 
 def process_variable_update(request):
     """Extract and return the variable value from the HTTP request body."""
@@ -178,25 +181,33 @@ def movement_detection():
     speed = int(gps.get_speed())
     print(speed)
     
+    # Hvis der måles hastighed genstartes timeren
     if speed > 1:
+        
         timer = 0
-        print(f"Timer reset: {timer}")
         in_movement = 1
+        
         movement_telemetry = {"in_movement": int(in_movement)}
         client.send_telemetry(movement_telemetry)
+        
         lcd.move_to(7, 3)
-        lcd.putstr(f'{timer}S')
+        lcd.putstr('             ')
+        
+    # Hvis at cyklen bevæger sig nulstiller tælleren
     elif speed == 0:
         timer += 1
-        print("Stand still")
-        print(f"Timer incremented: {timer}")
+        
         lcd.move_to(16, 3)
         lcd.putstr(f'{timer}S')
+        
+    # Hvis at timeren når 180 og at hastigheden stadigvæk er 0, sendes information til Thingsboard
     if timer > 180 and speed < 1:
-        print("Locked")
+        
         in_movement = 0
-        lcd.move_to(15, 3)
+        
+        lcd.move_to(14, 3)
         lcd.putstr(f'Locked')
+        
         movement_telemetry = {"in_movement": int(in_movement)}
         client.send_telemetry(movement_telemetry)
         
@@ -220,12 +231,13 @@ while True:
     # Batteri-procent med en non-blocking timer
     battery_timer.non_blocking_timer(battery)
 
-    # Advarselsystem til blindvinkel-sensorer
+    # Advarselsystem til blindvinkel-sensorer timer
     lcd_warning.lcd_warnings(right, left, rear)
     
     movement_timer.non_blocking_timer(movement_detection)
 
-    # Handle incoming HTTP requests
-    #handle_http_requests(http_server)
+    # Håndterer indgående HTTP requests timer
+    handle_http_requests(http_server)
     
+    # Garbage collection timer
     gc_timer.non_blocking_timer(gc1)
