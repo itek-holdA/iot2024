@@ -13,11 +13,7 @@ lcd = GpioLcd(rs_pin=Pin(27),            # Thingsboard skærm
               d7_pin=Pin(22),
               num_lines=4,
               num_columns=20)
-# 
-# ap = network.WLAN(network.AP_IF)
-# ap.active(True)
-# ap.config(essid="ESP32-AP", authmode=network.AUTH_OPEN)  # Åben for nem fejlsøgning
-# print("AP status:", ap.active())
+
 
 sta = network.WLAN(network.STA_IF)
 sta.active(True)
@@ -29,12 +25,12 @@ if not sta.isconnected():
     sta.ifconfig(('192.168.0.30', '255.255.255.192', '192.168.0.1', '192.168.0.10'))
     sta.connect(secret.SSID, secret.PASSWORD)
 
-    # Wait for connection
+    # Vent på forbindelse
     while not sta.isconnected():
         print("Connecting...")
         sleep(0.5)
 
 if sta.isconnected():
-    print("Connected to AP:", sta.ifconfig())
+    print("Forbundet til AP:", sta.ifconfig())
 else:
-    print("Connection failed")
+    print("Forbindelse fejlede")
